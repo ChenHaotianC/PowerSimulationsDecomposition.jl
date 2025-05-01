@@ -5,6 +5,8 @@ export MultiProblemTemplate
 
 export SplitAreaPTDFPowerModel
 
+export Relief
+
 import PowerSimulations
 import PowerNetworkMatrices
 import PowerSystems
