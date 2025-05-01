@@ -22,6 +22,7 @@ Base.@kwdef mutable struct MultiOptimizationContainer{T <: DecompositionAlgorith
     metadata::ISOPT.OptimizationContainerMetadata
     default_time_series_type::Type{<:PSY.TimeSeriesData}  # Maybe isn't needed here
     mpi_info::Union{Nothing, MpiInfo}
+    if_coordination::Int
 end
 
 function MultiOptimizationContainer(
@@ -73,6 +74,7 @@ function MultiOptimizationContainer(
         metadata=ISOPT.OptimizationContainerMetadata(),
         default_time_series_type=U,
         mpi_info=nothing,
+        if_coordination=2,
     )
 end
 
@@ -112,6 +114,8 @@ PSI.set_time_steps!(container::MultiOptimizationContainer, time_steps::UnitRange
 PSI.get_aux_variables(container::MultiOptimizationContainer) = container.aux_variables
 PSI.get_base_power(container::MultiOptimizationContainer) = container.base_power
 PSI.get_constraints(container::MultiOptimizationContainer) = container.constraints
+
+get_if_coordination(container::MultiOptimizationContainer) = container.if_coordination
 
 function get_subproblem(container::MultiOptimizationContainer, id::String)
     return container.subproblems[id]
