@@ -303,22 +303,22 @@ function solve_impl!(
                         end
                     end
                     if current_flow <= monitor_upper_bound + 0.0001 && current_flow >= monitor_upper_bound - 0.0001
-                        if relief_cost_upper > other_region_relief_cost_upper
+                        if relief_cost_upper < other_region_relief_cost_upper
                             JuMP.set_upper_bound(relief, 0)
                             JuMP.set_lower_bound(relief, -adjust_rate*monitor_upper_bound)
                         end
-                        if relief_cost_upper < other_region_relief_cost_upper
+                        if relief_cost_upper > other_region_relief_cost_upper
                             JuMP.set_upper_bound(relief, adjust_rate*monitor_upper_bound)
                             JuMP.set_lower_bound(relief, 0)
                         end
                     end
 
                     if current_flow >= monitor_upper_bound + 0.0001
-                        if relief_cost_upper > other_region_relief_cost_upper
+                        if relief_cost_upper < other_region_relief_cost_upper
                             JuMP.set_upper_bound(relief, 0.000001)
                             JuMP.set_lower_bound(relief, 0)
                         end
-                        if relief_cost_upper < other_region_relief_cost_upper
+                        if relief_cost_upper > other_region_relief_cost_upper
                             JuMP.set_upper_bound(relief, current_flow - monitor_upper_bound)
                             JuMP.set_lower_bound(relief, 0)
                         end
