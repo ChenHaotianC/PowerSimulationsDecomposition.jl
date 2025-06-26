@@ -199,6 +199,8 @@ function solve_impl!(
     adjust_rate = 0.1
     monitor_upper_key = PSY.InfrastructureSystems.Optimization.ConstraintKey{PSI.RateLimitConstraint, PSY.MonitoredLine}("ub")
     monitor_lower_key = PSY.InfrastructureSystems.Optimization.ConstraintKey{PSI.RateLimitConstraint, PSY.MonitoredLine}("lb")
+    sefl = container.monitored_flow
+    container.monitored_flow=0.0
     for (index, subproblem) in container.subproblems
         @debug "Solving problem $index"
         status = PSI.solve_impl!(subproblem, sys)
@@ -273,7 +275,19 @@ function solve_impl!(
                             cost_lower[(index, l)] = 10000000
                         end    
                     end
-                end     
+                end 
+                l = monitored_lines[1]
+                expression = subproblem.expressions[InfrastructureSystems.Optimization.ExpressionKey{PowerSimulations.PTDFBranchFlow, PSY.MonitoredLine}("")][l,1]
+                flow_value = JuMP.value(subproblem.variables[InfrastructureSystems.Optimization.VariableKey{PSI.FlowActivePowerVariable, PSY.MonitoredLine}("")][l,1])
+        
+                contribution_from_other_region = 0.0
+                for (var, coeff) in pairs(expression.terms)
+                    if occursin("param", JuMP.name(var))
+                        contribution_from_other_region += JuMP.value(var)*coeff
+                    end
+                end
+                flow_contribution[index] = flow_value - contribution_from_other_region
+                container.monitored_flow += flow_contribution[index]
             end  
         end
     end
@@ -294,7 +308,6 @@ function solve_impl!(
                     current_flow = JuMP.value(subproblem.variables[PSY.InfrastructureSystems.Optimization.VariableKey{PSI.FlowActivePowerVariable, PSY.MonitoredLine}("")][l,1])
                     relief_name = "$(l)_$(1)"
                     relief = subproblem.variables[PSY.InfrastructureSystems.Optimization.VariableKey{PowerSimulationsDecomposition.Relief, PSY.MonitoredLine}("")][relief_name,1]
-                    current_flow = current_flow - JuMP.value(relief)
                     other_region_relief_cost_upper = 0
                     relief_cost_upper = cost_upper[(index, l)]
                     for (key,value) in cost_upper
@@ -302,7 +315,7 @@ function solve_impl!(
                             other_region_relief_cost_upper = value
                         end
                     end
-                    if current_flow <= monitor_upper_bound + 0.0001 && current_flow >= monitor_upper_bound - 0.0001
+                    if sefl <= monitor_upper_bound + 0.0001 && sefl >= monitor_upper_bound - 0.0001
                         if relief_cost_upper < other_region_relief_cost_upper
                             JuMP.set_upper_bound(relief, 0)
                             JuMP.set_lower_bound(relief, -adjust_rate*monitor_upper_bound)
@@ -313,21 +326,21 @@ function solve_impl!(
                         end
                     end
 
-                    if current_flow >= monitor_upper_bound + 0.0001
+                    if sefl >= monitor_upper_bound + 0.0001
                         if relief_cost_upper < other_region_relief_cost_upper
                             JuMP.set_upper_bound(relief, 0.000001)
                             JuMP.set_lower_bound(relief, 0)
                         end
                         if relief_cost_upper > other_region_relief_cost_upper
-                            JuMP.set_upper_bound(relief, current_flow - monitor_upper_bound)
+                            JuMP.set_upper_bound(relief, sefl - monitor_upper_bound)
                             JuMP.set_lower_bound(relief, 0)
                         end
                     end
     
-                    if current_flow <= monitor_upper_bound - 0.0001 && current_flow >= monitor_lower_bound + 0.0001
+                    if sefl <= monitor_upper_bound - 0.0001 && sefl >= monitor_lower_bound + 0.0001
                         if relief_cost_upper > other_region_relief_cost_upper
                             JuMP.set_upper_bound(relief, 0)
-                            JuMP.set_lower_bound(relief, current_flow - monitor_upper_bound)              
+                            JuMP.set_lower_bound(relief, sefl - monitor_upper_bound)              
                         end
                         if relief_cost_upper < other_region_relief_cost_upper
                             JuMP.set_upper_bound(relief, 0)
@@ -335,7 +348,7 @@ function solve_impl!(
                         end
                         if relief_cost_upper == other_region_relief_cost_upper
                             JuMP.set_upper_bound(relief, 0)
-                            JuMP.set_lower_bound(relief, 0.5*(current_flow - monitor_upper_bound))
+                            JuMP.set_lower_bound(relief, 0.5*(sefl - monitor_upper_bound))
                         end
                     end
 
@@ -348,7 +361,7 @@ function solve_impl!(
                         end
                     end
 
-                    if current_flow <= monitor_lower_bound + 0.0001 && current_flow >= monitor_lower_bound - 0.0001
+                    if sefl <= monitor_lower_bound + 0.0001 && sefl >= monitor_lower_bound - 0.0001
                         if -relief_cost_lower < -other_region_relief_cost_lower
                             JuMP.set_upper_bound(relief, -adjust_rate*monitor_lower_bound)
                             JuMP.set_lower_bound(relief, 0)
@@ -359,21 +372,21 @@ function solve_impl!(
                         end
                     end
     
-                    if current_flow <= monitor_lower_bound - 0.0001
+                    if sefl <= monitor_lower_bound - 0.0001
                         if -relief_cost_lower > -other_region_relief_cost_lower
                             JuMP.set_upper_bound(relief, 0.000001)
                             JuMP.set_lower_bound(relief, 0)
                         end
                         if -relief_cost_lower < -other_region_relief_cost_lower
                             JuMP.set_upper_bound(relief, 0)
-                            JuMP.set_lower_bound(relief, current_flow - monitor_lower_bound)
+                            JuMP.set_lower_bound(relief, sefl - monitor_lower_bound)
                         end
                     end
     
-                    if current_flow <= monitor_upper_bound - 0.0001 && current_flow >= monitor_lower_bound + 0.0001
+                    if sefl <= monitor_upper_bound - 0.0001 && sefl >= monitor_lower_bound + 0.0001
                         if relief_cost_lower > other_region_relief_cost_lower
                             JuMP.set_upper_bound(relief, 0)
-                            JuMP.set_lower_bound(relief, current_flow - monitor_upper_bound)              
+                            JuMP.set_lower_bound(relief, sefl - monitor_upper_bound)              
                         end
                         if relief_cost_lower < other_region_relief_cost_lower
                             JuMP.set_upper_bound(relief, 0)
@@ -381,13 +394,13 @@ function solve_impl!(
                         end
                         if relief_cost_lower == other_region_relief_cost_lower
                             JuMP.set_upper_bound(relief, 0)
-                            JuMP.set_lower_bound(relief, 0.5*(current_flow - monitor_upper_bound))
+                            JuMP.set_lower_bound(relief, 0.5*(sefl - monitor_upper_bound))
                         end
                     end
 
-                    if current_flow > monitor_upper_bound-0.0001
+                    if sefl > monitor_upper_bound-0.0001
                         JuMP.set_objective_coefficient(subproblem.JuMPmodel, relief, other_region_relief_cost_upper)
-                    elseif current_flow < monitor_lower_bound+0.0001
+                    elseif sefl < monitor_lower_bound+0.0001
                         JuMP.set_objective_coefficient(subproblem.JuMPmodel, relief, other_region_relief_cost_lower)
                     else
                         JuMP.set_objective_coefficient(subproblem.JuMPmodel, relief, 0)
